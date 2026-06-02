@@ -56,13 +56,41 @@ public sealed class TestGenerationWorkflow(
         return $$"""
         Generate C# xUnit unit tests for this ASP.NET Core API controller.
 
-        Requirements:
-        - Return only valid C# code, no markdown fences.
-        - Use namespace {{testProjectNamespace}}.Generated.
-        - Use xUnit attributes.
-        - Include at least one test per endpoint.
-        - Keep tests deterministic and compile-ready.
+        CRITICAL REQUIREMENTS:
+        - Return ONLY valid C# code. NO markdown fences, NO explanations, NO comments outside the code.
+        - Use Moq version 4.x syntax (NOT 5.x).
+        - Use xUnit [Fact] and [Theory] attributes.
+        - Test ONLY the controller methods - do NOT test the service directly.
+        - Mock the IObjectService dependency injected into the controller.
+        - For synchronous controller methods: Use Setup().Returns() (NOT ReturnsAsync).
+        - For ActionResult<T> return types: Extract the value using result.Value property for assertions.
+        - For IActionResult return types: Use Assert.IsType<XxxResult>() to verify the response type.
+        - Ensure all required properties in DTOs are initialized (Name is required in CreateObjectRequest).
+        - Include positive tests (happy path) and negative tests (error cases).
+        - Make tests deterministic - use fixed test data, no random values.
+        - Each test method must be independently runnable without shared state.
         - Name test class {{controller.ControllerName}}Tests.
+
+        Example Test Pattern for Synchronous Method:
+        ```csharp
+        [Fact]
+        public void GetAll_ReturnsOkResultWithObjects()
+        {
+            // Arrange
+            var mockService = new Mock<IObjectService>();
+            var testObjects = new List<ObjectModel> { new ObjectModel { Id = 1, Name = "Test" } };
+            mockService.Setup(s => s.GetAll()).Returns(testObjects);
+            var controller = new ObjectsController(mockService.Object);
+
+            // Act
+            var result = controller.GetAll();
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            Assert.NotNull(okResult.Value);
+            mockService.Verify(s => s.GetAll(), Times.Once);
+        }
+        ```
 
         Controller endpoints:
         {{endpointLines}}
@@ -129,38 +157,22 @@ public sealed class TestGenerationWorkflow(
         return text;
     }
 
-    /// <summary>
-    /// Finds the index where actual C# code begins by looking for common C# keywords.
-    /// </summary>
-    private static int FindCodeStartIndex(string text)
-    {
-        var codeKeywords = new[] { "using", "namespace", "public", "private", "internal", "class", "[" };
-        var earliestIndex = int.MaxValue;
-
-        foreach (var keyword in codeKeywords)
-        {
-            var index = text.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
-            if (index >= 0 && index < earliestIndex)
-            {
-                earliestIndex = index;
-            }
-        }
-
-        return earliestIndex == int.MaxValue ? 0 : earliestIndex;
-    }
-
     private static string BuildFallbackTest(DiscoveredController controller, string generatedNamespace)
     {
         var testMethods = new StringBuilder();
         foreach (var endpoint in controller.Endpoints)
         {
             testMethods.AppendLine("    [Fact(Skip = \"Ollama generation returned empty output\")]");
-            testMethods.AppendLine($"    public void {endpoint.ActionName}_GeneratedPlaceholder() => Assert.True(true);");
+            testMethods.AppendLine($"    public void {endpoint.ActionName}_Placeholder() => Assert.True(true);");
             testMethods.AppendLine();
         }
 
         return $$"""
         using Xunit;
+        using Moq;
+        using {{controller.ControllerName.Replace("Controller", "")}}.Services;
+        using {{controller.ControllerName.Replace("Controller", "")}}.Controllers;
+        using {{controller.ControllerName.Replace("Controller", "")}}.Models;
 
         namespace {{generatedNamespace}};
 
