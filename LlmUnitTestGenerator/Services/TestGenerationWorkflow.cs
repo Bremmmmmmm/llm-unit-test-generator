@@ -76,40 +76,8 @@ public sealed class TestGenerationWorkflow(
     {
         var trimmed = generatedCode.Trim();
 
-        // Step 1: Look for markdown code fences (``` or ```c#, etc.)
-        var fenceStartIndex = trimmed.IndexOf("```", StringComparison.Ordinal);
-        
-        if (fenceStartIndex >= 0)
-        {
-            // Found opening fence - skip any descriptive text before it
-            // Move past the opening fence line (e.g., "```c#")
-            var firstLineEnd = trimmed.IndexOf('\n', fenceStartIndex);
-            if (firstLineEnd >= 0)
-            {
-                trimmed = trimmed[(firstLineEnd + 1)..];
-            }
-            else
-            {
-                trimmed = string.Empty;
-            }
-
-            // Now look for closing fence
-            var fenceEnd = trimmed.LastIndexOf("```", StringComparison.Ordinal);
-            if (fenceEnd >= 0)
-            {
-                trimmed = trimmed[..fenceEnd].Trim();
-            }
-        }
-        else
-        {
-            // No fence found - check if response starts with C# code markers
-            // (e.g., "using", "namespace", "public", etc.)
-            var codeStartIndex = FindCodeStartIndex(trimmed);
-            if (codeStartIndex > 0)
-            {
-                trimmed = trimmed[codeStartIndex..].Trim();
-            }
-        }
+        // Step 1: Strip markdown code fences if present
+        trimmed = StripMarkdownFences(trimmed);
 
         if (string.IsNullOrWhiteSpace(trimmed))
         {
@@ -117,6 +85,48 @@ public sealed class TestGenerationWorkflow(
         }
 
         return trimmed + Environment.NewLine;
+    }
+
+    /// <summary>
+    /// Removes markdown code fences (``` or ```c#) from the beginning and end of the text.
+    /// </summary>
+    private static string StripMarkdownFences(string text)
+    {
+        var lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+        var startIndex = 0;
+        var endIndex = lines.Length;
+
+        // Find opening fence
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i].Trim();
+            if (line.StartsWith("```", StringComparison.Ordinal))
+            {
+                startIndex = i + 1;
+                break;
+            }
+        }
+
+        // Find closing fence
+        for (int i = lines.Length - 1; i >= startIndex; i--)
+        {
+            var line = lines[i].Trim();
+            if (line.StartsWith("```", StringComparison.Ordinal))
+            {
+                endIndex = i;
+                break;
+            }
+        }
+
+        // If we found fences, extract content between them
+        if (startIndex < endIndex)
+        {
+            var contentLines = lines[startIndex..endIndex];
+            return string.Join(Environment.NewLine, contentLines).Trim();
+        }
+
+        // No fences found, return original text
+        return text;
     }
 
     /// <summary>
