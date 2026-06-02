@@ -54,9 +54,12 @@ public sealed class TestGenerationWorkflow(
             controller.Endpoints.Select(e => $"- {e.HttpMethod} {JoinRoute(controller.RoutePrefix, e.RouteTemplate)} -> {e.ActionName}"));
 
         return $$"""
-        Generate C# xUnit unit tests for this ASP.NET Core API controller.
+        Generate ONLY xUnit unit test code for this ASP.NET Core API controller.
 
-        CRITICAL REQUIREMENTS:
+        *** CRITICAL: DO NOT include the controller class definition. DO NOT copy the controller code. ***
+        *** Generate ONLY a test class with test methods. ***
+
+        REQUIREMENTS:
         - Return ONLY valid C# code. NO markdown fences, NO explanations, NO comments outside the code.
         - Include REQUIRED using statements at the top:
           * using Xunit;
@@ -64,98 +67,97 @@ public sealed class TestGenerationWorkflow(
           * using NoTestApplication.Services;
           * using NoTestApplication.Controllers;
           * using NoTestApplication.Models;
-          * using {{testProjectNamespace}};
+        - Use namespace {{testProjectNamespace}};
         - Use Moq version 4.x syntax (NOT 5.x).
-        - Use xUnit [Fact] and [Theory] attributes.
-        - Test ONLY the controller methods - do NOT test the service directly.
-        - Mock the IObjectService dependency injected into the controller.
+        - Use xUnit [Fact] attributes.
+        - Test ONLY the controller methods by mocking dependencies - do NOT test the service.
+        - Mock the IObjectService dependency that is injected into the controller constructor.
         - For synchronous controller methods: Use Setup().Returns() (NOT ReturnsAsync).
-        - For ActionResult<T> return types: Extract the value using result.Value property for assertions.
-        - For IActionResult return types: Use Assert.IsType<XxxResult>() to verify the response type.
+        - For ActionResult<T> return types: Extract the value using result.Result property and Assert.IsType<OkObjectResult>().
+        - For IActionResult return types: Use Assert.IsType<NoContentResult>() or Assert.IsType<NotFoundObjectResult>() etc.
         - Ensure all required properties in DTOs are initialized (Name is required in CreateObjectRequest).
         - Include positive tests (happy path) and negative tests (error cases).
         - Make tests deterministic - use fixed test data, no random values.
         - Each test method must be independently runnable without shared state.
         - Name test class {{controller.ControllerName}}Tests.
+        - The test class MUST have a constructor that instantiates the mock service and controller.
 
-        Example Test Pattern for Synchronous Method with ActionResult<T>:
+        EXAMPLE STRUCTURE (do not copy exactly, adapt to the actual controller):
         ```csharp
         using Xunit;
         using Moq;
         using NoTestApplication.Services;
         using NoTestApplication.Controllers;
         using NoTestApplication.Models;
-        using {{testProjectNamespace}};
 
         namespace {{testProjectNamespace}};
 
         public class {{controller.ControllerName}}Tests
         {
+            private readonly Mock<IObjectService> _mockService;
+            private readonly {{controller.ControllerName}} _controller;
+
+            public {{controller.ControllerName}}Tests()
+            {
+                _mockService = new Mock<IObjectService>();
+                _controller = new {{controller.ControllerName}}(_mockService.Object);
+            }
+
             [Fact]
-            public void GetAll_ReturnsOkResultWithObjects()
+            public void GetAll_ReturnsOkWithObjects()
             {
                 // Arrange
-                var mockService = new Mock<IObjectService>();
                 var testObjects = new List<ObjectModel> 
                 { 
-                    new ObjectModel { Id = 1, Name = "Test Object", Date = DateTime.Now } 
+                    new ObjectModel { Id = 1, Name = "Test", Date = DateTime.Now } 
                 };
-                mockService.Setup(s => s.GetAll()).Returns(testObjects);
-                var controller = new {{controller.ControllerName}}(mockService.Object);
+                _mockService.Setup(s => s.GetAll()).Returns(testObjects);
 
                 // Act
-                var result = controller.GetAll();
+                var result = _controller.GetAll();
 
                 // Assert
                 var okResult = Assert.IsType<OkObjectResult>(result.Result);
                 Assert.NotNull(okResult.Value);
-                var returnedObjects = Assert.IsAssignableFrom<IEnumerable<ObjectModel>>(okResult.Value);
-                Assert.NotEmpty(returnedObjects);
-                mockService.Verify(s => s.GetAll(), Times.Once);
+                _mockService.Verify(s => s.GetAll(), Times.Once);
             }
 
             [Fact]
-            public void GetById_WithValidId_ReturnsOkResult()
+            public void GetById_WithValidId_ReturnsOk()
             {
                 // Arrange
-                var mockService = new Mock<IObjectService>();
                 var testObject = new ObjectModel { Id = 1, Name = "Test", Date = DateTime.Now };
-                mockService.Setup(s => s.GetById(1)).Returns(testObject);
-                var controller = new {{controller.ControllerName}}(mockService.Object);
+                _mockService.Setup(s => s.GetById(1)).Returns(testObject);
 
                 // Act
-                var result = controller.GetById(1);
+                var result = _controller.GetById(1);
 
                 // Assert
                 var okResult = Assert.IsType<OkObjectResult>(result.Result);
                 var returnedObject = Assert.IsType<ObjectModel>(okResult.Value);
                 Assert.Equal(1, returnedObject.Id);
-                mockService.Verify(s => s.GetById(1), Times.Once);
             }
 
             [Fact]
             public void GetById_WithInvalidId_ReturnsNotFound()
             {
                 // Arrange
-                var mockService = new Mock<IObjectService>();
-                mockService.Setup(s => s.GetById(It.IsAny<int>())).Returns((ObjectModel)null);
-                var controller = new {{controller.ControllerName}}(mockService.Object);
+                _mockService.Setup(s => s.GetById(It.IsAny<int>())).Returns((ObjectModel)null);
 
                 // Act
-                var result = controller.GetById(999);
+                var result = _controller.GetById(999);
 
                 // Assert
                 Assert.IsType<NotFoundObjectResult>(result.Result);
-                mockService.Verify(s => s.GetById(999), Times.Once);
             }
         }
         ```
 
-        Controller endpoints:
-        {{endpointLines}}
-
-        Controller source:
+        CONTROLLER TO TEST (do not copy this into generated tests - only use it to understand what to test):
         {{controller.SourceCode}}
+
+        Controller endpoints to test:
+        {{endpointLines}}
         """;
     }
 
@@ -237,6 +239,15 @@ public sealed class TestGenerationWorkflow(
 
         public class {{controller.ControllerName}}Tests
         {
+            private readonly Mock<IObjectService> _mockService;
+            private readonly {{controller.ControllerName}} _controller;
+
+            public {{controller.ControllerName}}Tests()
+            {
+                _mockService = new Mock<IObjectService>();
+                _controller = new {{controller.ControllerName}}(_mockService.Object);
+            }
+
         {{testMethods.ToString().TrimEnd()}}
         }
         """;
