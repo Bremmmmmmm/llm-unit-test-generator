@@ -61,9 +61,10 @@ public sealed class TestGenerationWorkflow(
 
         REQUIREMENTS:
         - Return ONLY valid C# code. NO markdown fences, NO explanations, NO comments outside the code.
-        - Include REQUIRED using statements at the top:
+        - Include REQUIRED using statements at the top (in this exact order):
           * using Xunit;
           * using Moq;
+          * using Microsoft.AspNetCore.Mvc;
           * using NoTestApplication.Services;
           * using NoTestApplication.Controllers;
           * using NoTestApplication.Models;
@@ -73,8 +74,13 @@ public sealed class TestGenerationWorkflow(
         - Test ONLY the controller methods by mocking dependencies - do NOT test the service.
         - Mock the IObjectService dependency that is injected into the controller constructor.
         - For synchronous controller methods: Use Setup().Returns() (NOT ReturnsAsync).
-        - For ActionResult<T> return types: Extract the value using result.Result property and Assert.IsType<OkObjectResult>().
-        - For IActionResult return types: Use Assert.IsType<NoContentResult>() or Assert.IsType<NotFoundObjectResult>() etc.
+        - For ActionResult<T> return types (e.g., ActionResult<ObjectModel>):
+          * Extract result using: var okResult = Assert.IsType<OkObjectResult>(result.Result);
+          * Then assert on okResult.Value
+        - For IActionResult return types (e.g., Update/Delete methods):
+          * Use: Assert.IsType<NoContentResult>(result); directly (no .Result property)
+          * Use: Assert.IsType<NotFoundObjectResult>(result); for error cases
+          * Use: Assert.IsType<CreatedAtActionResult>(result); for creation responses
         - Ensure all required properties in DTOs are initialized (Name is required in CreateObjectRequest).
         - Include positive tests (happy path) and negative tests (error cases).
         - Make tests deterministic - use fixed test data, no random values.
@@ -82,10 +88,11 @@ public sealed class TestGenerationWorkflow(
         - Name test class {{controller.ControllerName}}Tests.
         - The test class MUST have a constructor that instantiates the mock service and controller.
 
-        EXAMPLE STRUCTURE (do not copy exactly, adapt to the actual controller):
+        EXAMPLE STRUCTURE (adapt to the actual controller, do not copy exactly):
         ```csharp
         using Xunit;
         using Moq;
+        using Microsoft.AspNetCore.Mvc;
         using NoTestApplication.Services;
         using NoTestApplication.Controllers;
         using NoTestApplication.Models;
@@ -123,32 +130,50 @@ public sealed class TestGenerationWorkflow(
             }
 
             [Fact]
-            public void GetById_WithValidId_ReturnsOk()
+            public void Create_WithValidRequest_ReturnsCreatedAtAction()
             {
                 // Arrange
-                var testObject = new ObjectModel { Id = 1, Name = "Test", Date = DateTime.Now };
-                _mockService.Setup(s => s.GetById(1)).Returns(testObject);
+                var request = new CreateObjectRequest { Name = "New Object", Date = DateTime.Now };
+                var createdObject = new ObjectModel { Id = 1, Name = request.Name, Date = request.Date };
+                _mockService.Setup(s => s.Create(request)).Returns(createdObject);
 
                 // Act
-                var result = _controller.GetById(1);
+                var result = _controller.Create(request);
 
                 // Assert
-                var okResult = Assert.IsType<OkObjectResult>(result.Result);
-                var returnedObject = Assert.IsType<ObjectModel>(okResult.Value);
+                var createdResult = Assert.IsType<CreatedAtActionResult>(result.Result);
+                Assert.Equal(nameof({{controller.ControllerName}}.GetById), createdResult.ActionName);
+                var returnedObject = Assert.IsType<ObjectModel>(createdResult.Value);
                 Assert.Equal(1, returnedObject.Id);
             }
 
             [Fact]
-            public void GetById_WithInvalidId_ReturnsNotFound()
+            public void Update_WithValidId_ReturnsNoContent()
             {
                 // Arrange
-                _mockService.Setup(s => s.GetById(It.IsAny<int>())).Returns((ObjectModel)null);
+                var request = new UpdateObjectRequest { Name = "Updated", Date = DateTime.Now };
+                _mockService.Setup(s => s.Update(1, request)).Returns(true);
 
                 // Act
-                var result = _controller.GetById(999);
+                var result = _controller.Update(1, request);
 
                 // Assert
-                Assert.IsType<NotFoundObjectResult>(result.Result);
+                Assert.IsType<NoContentResult>(result);
+                _mockService.Verify(s => s.Update(1, request), Times.Once);
+            }
+
+            [Fact]
+            public void Update_WithInvalidId_ReturnsNotFound()
+            {
+                // Arrange
+                var request = new UpdateObjectRequest { Name = "Updated", Date = DateTime.Now };
+                _mockService.Setup(s => s.Update(999, request)).Returns(false);
+
+                // Act
+                var result = _controller.Update(999, request);
+
+                // Assert
+                Assert.IsType<NotFoundObjectResult>(result);
             }
         }
         ```
@@ -231,6 +256,7 @@ public sealed class TestGenerationWorkflow(
         return $$"""
         using Xunit;
         using Moq;
+        using Microsoft.AspNetCore.Mvc;
         using NoTestApplication.Services;
         using NoTestApplication.Controllers;
         using NoTestApplication.Models;
