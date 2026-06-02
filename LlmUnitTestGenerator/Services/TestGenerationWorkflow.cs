@@ -58,6 +58,13 @@ public sealed class TestGenerationWorkflow(
 
         CRITICAL REQUIREMENTS:
         - Return ONLY valid C# code. NO markdown fences, NO explanations, NO comments outside the code.
+        - Include REQUIRED using statements at the top:
+          * using Xunit;
+          * using Moq;
+          * using NoTestApplication.Services;
+          * using NoTestApplication.Controllers;
+          * using NoTestApplication.Models;
+          * using {{testProjectNamespace}};
         - Use Moq version 4.x syntax (NOT 5.x).
         - Use xUnit [Fact] and [Theory] attributes.
         - Test ONLY the controller methods - do NOT test the service directly.
@@ -71,24 +78,76 @@ public sealed class TestGenerationWorkflow(
         - Each test method must be independently runnable without shared state.
         - Name test class {{controller.ControllerName}}Tests.
 
-        Example Test Pattern for Synchronous Method:
+        Example Test Pattern for Synchronous Method with ActionResult<T>:
         ```csharp
-        [Fact]
-        public void GetAll_ReturnsOkResultWithObjects()
+        using Xunit;
+        using Moq;
+        using NoTestApplication.Services;
+        using NoTestApplication.Controllers;
+        using NoTestApplication.Models;
+        using {{testProjectNamespace}};
+
+        namespace {{testProjectNamespace}};
+
+        public class {{controller.ControllerName}}Tests
         {
-            // Arrange
-            var mockService = new Mock<IObjectService>();
-            var testObjects = new List<ObjectModel> { new ObjectModel { Id = 1, Name = "Test" } };
-            mockService.Setup(s => s.GetAll()).Returns(testObjects);
-            var controller = new ObjectsController(mockService.Object);
+            [Fact]
+            public void GetAll_ReturnsOkResultWithObjects()
+            {
+                // Arrange
+                var mockService = new Mock<IObjectService>();
+                var testObjects = new List<ObjectModel> 
+                { 
+                    new ObjectModel { Id = 1, Name = "Test Object", Date = DateTime.Now } 
+                };
+                mockService.Setup(s => s.GetAll()).Returns(testObjects);
+                var controller = new {{controller.ControllerName}}(mockService.Object);
 
-            // Act
-            var result = controller.GetAll();
+                // Act
+                var result = controller.GetAll();
 
-            // Assert
-            var okResult = Assert.IsType<OkObjectResult>(result.Result);
-            Assert.NotNull(okResult.Value);
-            mockService.Verify(s => s.GetAll(), Times.Once);
+                // Assert
+                var okResult = Assert.IsType<OkObjectResult>(result.Result);
+                Assert.NotNull(okResult.Value);
+                var returnedObjects = Assert.IsAssignableFrom<IEnumerable<ObjectModel>>(okResult.Value);
+                Assert.NotEmpty(returnedObjects);
+                mockService.Verify(s => s.GetAll(), Times.Once);
+            }
+
+            [Fact]
+            public void GetById_WithValidId_ReturnsOkResult()
+            {
+                // Arrange
+                var mockService = new Mock<IObjectService>();
+                var testObject = new ObjectModel { Id = 1, Name = "Test", Date = DateTime.Now };
+                mockService.Setup(s => s.GetById(1)).Returns(testObject);
+                var controller = new {{controller.ControllerName}}(mockService.Object);
+
+                // Act
+                var result = controller.GetById(1);
+
+                // Assert
+                var okResult = Assert.IsType<OkObjectResult>(result.Result);
+                var returnedObject = Assert.IsType<ObjectModel>(okResult.Value);
+                Assert.Equal(1, returnedObject.Id);
+                mockService.Verify(s => s.GetById(1), Times.Once);
+            }
+
+            [Fact]
+            public void GetById_WithInvalidId_ReturnsNotFound()
+            {
+                // Arrange
+                var mockService = new Mock<IObjectService>();
+                mockService.Setup(s => s.GetById(It.IsAny<int>())).Returns((ObjectModel)null);
+                var controller = new {{controller.ControllerName}}(mockService.Object);
+
+                // Act
+                var result = controller.GetById(999);
+
+                // Assert
+                Assert.IsType<NotFoundObjectResult>(result.Result);
+                mockService.Verify(s => s.GetById(999), Times.Once);
+            }
         }
         ```
 
@@ -170,9 +229,9 @@ public sealed class TestGenerationWorkflow(
         return $$"""
         using Xunit;
         using Moq;
-        using {{controller.ControllerName.Replace("Controller", "")}}.Services;
-        using {{controller.ControllerName.Replace("Controller", "")}}.Controllers;
-        using {{controller.ControllerName.Replace("Controller", "")}}.Models;
+        using NoTestApplication.Services;
+        using NoTestApplication.Controllers;
+        using NoTestApplication.Models;
 
         namespace {{generatedNamespace}};
 
