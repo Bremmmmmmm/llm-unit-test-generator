@@ -74,13 +74,17 @@ public sealed class TestGenerationWorkflow(
         - Test ONLY the controller methods by mocking dependencies - do NOT test the service.
         - Mock the IObjectService dependency that is injected into the controller constructor.
         - For synchronous controller methods: Use Setup().Returns() (NOT ReturnsAsync).
-        - For ActionResult<T> return types (e.g., ActionResult<ObjectModel>):
-          * Extract result using: var okResult = Assert.IsType<OkObjectResult>(result.Result);
-          * Then assert on okResult.Value
-        - For IActionResult return types (e.g., Update/Delete methods):
-          * Use: Assert.IsType<NoContentResult>(result); directly (no .Result property)
-          * Use: Assert.IsType<NotFoundObjectResult>(result); for error cases
-          * Use: Assert.IsType<CreatedAtActionResult>(result); for creation responses
+
+        *** CRITICAL RETURN TYPE HANDLING ***
+        - For ActionResult<T> return types (GetAll, GetById, Create):
+          * Extract result using: var result = _controller.MethodName();
+          * Then access the Result property: var okResult = Assert.IsType<OkObjectResult>(result.Result);
+          * Then check okResult.Value for the actual object
+        - For IActionResult return types (Update, Delete):
+          * Extract result using: var result = _controller.MethodName();
+          * Do NOT use .Result - directly assert on result: Assert.IsType<NoContentResult>(result);
+          * Do NOT use .Result - directly assert on result: Assert.IsType<NotFoundObjectResult>(result);
+
         - Ensure all required properties in DTOs are initialized (Name is required in CreateObjectRequest).
         - Include positive tests (happy path) and negative tests (error cases).
         - Make tests deterministic - use fixed test data, no random values.
@@ -123,7 +127,7 @@ public sealed class TestGenerationWorkflow(
                 // Act
                 var result = _controller.GetAll();
 
-                // Assert
+                // Assert - ActionResult<T>, use .Result
                 var okResult = Assert.IsType<OkObjectResult>(result.Result);
                 Assert.NotNull(okResult.Value);
                 _mockService.Verify(s => s.GetAll(), Times.Once);
@@ -140,7 +144,7 @@ public sealed class TestGenerationWorkflow(
                 // Act
                 var result = _controller.Create(request);
 
-                // Assert
+                // Assert - ActionResult<T>, use .Result
                 var createdResult = Assert.IsType<CreatedAtActionResult>(result.Result);
                 Assert.Equal(nameof({{controller.ControllerName}}.GetById), createdResult.ActionName);
                 var returnedObject = Assert.IsType<ObjectModel>(createdResult.Value);
@@ -157,7 +161,7 @@ public sealed class TestGenerationWorkflow(
                 // Act
                 var result = _controller.Update(1, request);
 
-                // Assert
+                // Assert - IActionResult, do NOT use .Result
                 Assert.IsType<NoContentResult>(result);
                 _mockService.Verify(s => s.Update(1, request), Times.Once);
             }
@@ -172,7 +176,34 @@ public sealed class TestGenerationWorkflow(
                 // Act
                 var result = _controller.Update(999, request);
 
-                // Assert
+                // Assert - IActionResult, do NOT use .Result
+                Assert.IsType<NotFoundObjectResult>(result);
+            }
+
+            [Fact]
+            public void Delete_WithValidId_ReturnsNoContent()
+            {
+                // Arrange
+                _mockService.Setup(s => s.Delete(1)).Returns(true);
+
+                // Act
+                var result = _controller.Delete(1);
+
+                // Assert - IActionResult, do NOT use .Result
+                Assert.IsType<NoContentResult>(result);
+                _mockService.Verify(s => s.Delete(1), Times.Once);
+            }
+
+            [Fact]
+            public void Delete_WithInvalidId_ReturnsNotFound()
+            {
+                // Arrange
+                _mockService.Setup(s => s.Delete(999)).Returns(false);
+
+                // Act
+                var result = _controller.Delete(999);
+
+                // Assert - IActionResult, do NOT use .Result
                 Assert.IsType<NotFoundObjectResult>(result);
             }
         }
