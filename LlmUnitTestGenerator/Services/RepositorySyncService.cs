@@ -15,24 +15,26 @@ public sealed class RepositorySyncService(IOptions<GeneratorOptions> options, Gi
         var repositoryName = config.GitHub.RepositoryFullName.Split('/').Last();
         var localRepositoryPath = Path.Combine(repoRoot, repositoryName);
 
+        // Clean up workspace directory at the start to ensure fresh clone/pull
+        if (Directory.Exists(repoRoot))
+        {
+            logger.LogInformation("Cleaning up workspace directory {Path}.", repoRoot);
+            try
+            {
+                Directory.Delete(repoRoot, recursive: true);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to delete workspace directory; attempting to continue.");
+            }
+        }
+
         Directory.CreateDirectory(repoRoot);
 
         var authenticatedUrl = BuildAuthenticatedUrl(config.GitHub.RepositoryCloneUrl, config.GitHub.PatToken);
 
-        if (!Directory.Exists(Path.Combine(localRepositoryPath, ".git")))
-        {
-            logger.LogInformation("Cloning repository {Repository} into {Path}.", config.GitHub.RepositoryFullName, localRepositoryPath);
-            await git.RunAsync(repoRoot, cancellationToken, "clone", "--branch", config.GitHub.MainBranch, authenticatedUrl, localRepositoryPath);
-        }
-        else
-        {
-            logger.LogInformation("Updating repository in {Path}.", localRepositoryPath);
-            await git.RunAsync(localRepositoryPath, cancellationToken, "remote", "set-url", "origin", authenticatedUrl);
-            await git.RunAsync(localRepositoryPath, cancellationToken, "fetch", "origin");
-            await git.RunAsync(localRepositoryPath, cancellationToken, "checkout", config.GitHub.MainBranch);
-            await git.RunAsync(localRepositoryPath, cancellationToken, "reset", "--hard", $"origin/{config.GitHub.MainBranch}");
-            await git.RunAsync(localRepositoryPath, cancellationToken, "clean", "-fd");
-        }
+        logger.LogInformation("Cloning repository {Repository} into {Path}.", config.GitHub.RepositoryFullName, localRepositoryPath);
+        await git.RunAsync(repoRoot, cancellationToken, "clone", "--branch", config.GitHub.MainBranch, authenticatedUrl, localRepositoryPath);
 
         return localRepositoryPath;
     }
