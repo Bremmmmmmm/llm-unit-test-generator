@@ -30,7 +30,7 @@ public sealed class TestProjectService(IOptions<GeneratorOptions> options)
             .EnumerateFiles(repositoryPath, "*.csproj", SearchOption.AllDirectories)
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
-            .Where(path => !path.Contains("Test", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !IsTestProject(path))
             .ToList();
 
         if (projectFiles.Count == 0)
@@ -39,6 +39,33 @@ public sealed class TestProjectService(IOptions<GeneratorOptions> options)
         }
 
         return projectFiles[0];
+    }
+
+    /// <summary>
+    /// Determines if a .csproj file is a test project based on naming conventions.
+    /// </summary>
+    private static bool IsTestProject(string projectPath)
+    {
+        var fileName = Path.GetFileNameWithoutExtension(projectPath);
+        var dirName = Path.GetDirectoryName(projectPath) ?? "";
+
+        // Check if the project file name ends with .Tests or .Test
+        if (fileName.EndsWith("Tests", StringComparison.OrdinalIgnoreCase) || 
+            fileName.EndsWith("Test", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Check if the project is in a Tests/ or Test/ directory
+        if (dirName.Contains($"{Path.DirectorySeparatorChar}Tests{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) ||
+            dirName.Contains($"{Path.DirectorySeparatorChar}Test{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) ||
+            dirName.EndsWith($"{Path.DirectorySeparatorChar}Tests", StringComparison.OrdinalIgnoreCase) ||
+            dirName.EndsWith($"{Path.DirectorySeparatorChar}Test", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static string BuildProjectFileContent(string projectName, string apiProjectPath, string testProjectDir, string targetFramework)
