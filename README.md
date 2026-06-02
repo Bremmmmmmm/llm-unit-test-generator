@@ -24,7 +24,7 @@ Local C# webhook service that listens for GitHub push events on `main` in `No-Te
 
 Set values in:
 
-- `/tmp/workspace/Bremmmmmmm/llm-unit-test-generator/LlmUnitTestGenerator/appsettings.json`
+- `LlmUnitTestGenerator/appsettings.json`
 - or override with environment variables (recommended for PAT)
 
 Required keys:
@@ -45,7 +45,7 @@ Defaults already set for your choices:
 ## Run locally
 
 ```bash
-cd /tmp/workspace/Bremmmmmmm/llm-unit-test-generator/LlmUnitTestGenerator
+cd LlmUnitTestGenerator
 dotnet run
 ```
 

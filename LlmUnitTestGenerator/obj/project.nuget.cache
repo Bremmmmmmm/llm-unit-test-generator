@@ -1,8 +1,12 @@
 {
   "version": 2,
-  "dgSpecHash": "5pmqbn7TJcw=",
+  "dgSpecHash": "VA9zIpcDAY4=",
   "success": true,
   "projectFilePath": "/tmp/workspace/Bremmmmmmm/llm-unit-test-generator/LlmUnitTestGenerator/LlmUnitTestGenerator.csproj",
-  "expectedPackageFiles": [],
+  "expectedPackageFiles": [
+    "/tmp/codeql-scratch-9d41207fed979c15/dbs/csharp/working/packages/microsoft.netcore.app.ref/10.0.8/microsoft.netcore.app.ref.10.0.8.nupkg.sha512",
+    "/tmp/codeql-scratch-9d41207fed979c15/dbs/csharp/working/packages/microsoft.aspnetcore.app.ref/10.0.8/microsoft.aspnetcore.app.ref.10.0.8.nupkg.sha512",
+    "/tmp/codeql-scratch-9d41207fed979c15/dbs/csharp/working/packages/microsoft.netcore.app.host.linux-x64/10.0.8/microsoft.netcore.app.host.linux-x64.10.0.8.nupkg.sha512"
+  ],
   "logs": []
 }
