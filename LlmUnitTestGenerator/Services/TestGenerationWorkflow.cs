@@ -76,18 +76,38 @@ public sealed class TestGenerationWorkflow(
     {
         var trimmed = generatedCode.Trim();
 
-        if (trimmed.StartsWith("```", StringComparison.Ordinal))
+        // Step 1: Look for markdown code fences (``` or ```c#, etc.)
+        var fenceStartIndex = trimmed.IndexOf("```", StringComparison.Ordinal);
+        
+        if (fenceStartIndex >= 0)
         {
-            var firstLineEnd = trimmed.IndexOf('\n');
+            // Found opening fence - skip any descriptive text before it
+            // Move past the opening fence line (e.g., "```c#")
+            var firstLineEnd = trimmed.IndexOf('\n', fenceStartIndex);
             if (firstLineEnd >= 0)
             {
                 trimmed = trimmed[(firstLineEnd + 1)..];
             }
+            else
+            {
+                trimmed = string.Empty;
+            }
 
+            // Now look for closing fence
             var fenceEnd = trimmed.LastIndexOf("```", StringComparison.Ordinal);
             if (fenceEnd >= 0)
             {
                 trimmed = trimmed[..fenceEnd].Trim();
+            }
+        }
+        else
+        {
+            // No fence found - check if response starts with C# code markers
+            // (e.g., "using", "namespace", "public", etc.)
+            var codeStartIndex = FindCodeStartIndex(trimmed);
+            if (codeStartIndex > 0)
+            {
+                trimmed = trimmed[codeStartIndex..].Trim();
             }
         }
 
@@ -97,6 +117,26 @@ public sealed class TestGenerationWorkflow(
         }
 
         return trimmed + Environment.NewLine;
+    }
+
+    /// <summary>
+    /// Finds the index where actual C# code begins by looking for common C# keywords.
+    /// </summary>
+    private static int FindCodeStartIndex(string text)
+    {
+        var codeKeywords = new[] { "using", "namespace", "public", "private", "internal", "class", "[" };
+        var earliestIndex = int.MaxValue;
+
+        foreach (var keyword in codeKeywords)
+        {
+            var index = text.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
+            if (index >= 0 && index < earliestIndex)
+            {
+                earliestIndex = index;
+            }
+        }
+
+        return earliestIndex == int.MaxValue ? 0 : earliestIndex;
     }
 
     private static string BuildFallbackTest(DiscoveredController controller, string generatedNamespace)
